@@ -8,6 +8,7 @@ export class LoginPage {
 
   constructor(page: Page) {
     this.page = page;
+    //this.usernameInput = page.locator('[data-test="usern"]'); // сломала тут локатор - для практики Allure
     this.usernameInput = page.locator('[data-test="username"]');
     this.passwordInput = page.locator('[data-test="password"]');
     this.loginButton = page.locator('[data-test="login-button"]');
