@@ -5,11 +5,8 @@ on:
   pull_request:
     branches: [ main, master ]
   schedule:
-    # Запуск каждый день в полночь. ВНИМАНИЕ: время в cron указывается по UTC!
-    # Примечание: GitHub не гарантирует запуск минута в минуту и может стартовать с задержкой.
     - cron: '0 0 * * *' 
 
-# Даем права пайплайну на запись, чтобы он мог публиковать сайт
 permissions:
   contents: write
 
@@ -18,51 +15,72 @@ jobs:
     timeout-minutes: 60
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         browser: [chromium, firefox, webkit]
     steps:
     - uses: actions/checkout@v4
-    
-    # Настраиваем Node.js и кэшируем npm зависимости для ускорения CI
+
     - uses: actions/setup-node@v4
       with:
         node-version: lts/*
         cache: 'npm'
-        
-    # Установка зависимостей. 
-    # ВНИМАНИЕ: Если шаг падает, убедитесь, что вы закоммитили файл package-lock.json!
+
     - name: Install dependencies
       run: npm ci
-      
+
     - name: Install Playwright Browsers
       run: npx playwright install --with-deps
-      
+
     - name: Run Playwright tests
-      run: npx playwright test
-      
-    # Сохраняем базовый HTML-отчет
+      run: npx playwright test --project=${{ matrix.browser }}
+
     - name: Upload Playwright Report
       uses: actions/upload-artifact@v4
       if: always()
       with:
-        name: playwright-report
+        name: playwright-report-${{ matrix.browser }}
         path: playwright-report
         retention-days: 10
 
-    # Устанавливаем Allure CLI напрямую, без Docker
-    - name: Install Allure CLI
+    # Каждый браузер сохраняет свои allure-results отдельным артефактом
+    - name: Upload Allure Results
+      uses: actions/upload-artifact@v4
       if: always()
+      with:
+        name: allure-results-${{ matrix.browser }}
+        path: allure-results
+        retention-days: 10
+
+  # Отдельная job — запускается один раз, после того как ВСЕ браузеры завершатся
+  report:
+    needs: test
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - uses: actions/setup-node@v4
+      with:
+        node-version: lts/*
+
+    # Скачивает все три артефакта allure-results-* и кладёт их
+    # в одну общую папку allure-results, объединяя результаты
+    - name: Download all Allure Results
+      uses: actions/download-artifact@v4
+      with:
+        pattern: allure-results-*
+        path: allure-results
+        merge-multiple: true
+
+    - name: Install Allure CLI
       run: npm install -g allure-commandline --save-dev
 
-    # Генерируем Allure отчет без стороннего Docker-экшена
     - name: Generate Allure Report
-      if: always()
       run: allure generate allure-results --clean -o allure-history
 
-    # Публикуем статичный сайт на GitHub Pages
     - name: Deploy Allure to GitHub Pages
       uses: peaceiris/actions-gh-pages@v4
-      if: always()
       with:
         github_token: ${{ secrets.GITHUB_TOKEN }}
         publish_branch: gh-pages
