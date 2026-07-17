@@ -46,13 +46,15 @@ jobs:
         path: playwright-report
         retention-days: 10
 
-    # Генерируем Allure отчет стабильной версией экшена
-    - name: Generate Allure Report
-      uses: simple-elf/allure-report-action@v1.9
+    # Устанавливаем Allure CLI напрямую, без Docker
+    - name: Install Allure CLI
       if: always()
-      with:
-        allure_results: allure-results
-        allure_history: allure-history
+      run: npm install -g allure-commandline --save-dev
+
+    # Генерируем Allure отчет без стороннего Docker-экшена
+    - name: Generate Allure Report
+      if: always()
+      run: allure generate allure-results --clean -o allure-history
 
     # Публикуем статичный сайт на GitHub Pages
     - name: Deploy Allure to GitHub Pages
